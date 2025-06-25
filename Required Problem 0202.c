@@ -1,246 +1,319 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+/**
+ * @file stage1.c
+ * @brief A state-aware, hierarchical menu system for the Magrathea project.
+ *
+ * This program implements the main menu and a multi-stage training menu.
+ * This version adds full functionality for "Stage 1: Physical Strength & Knowledge",
+ * allowing a user to input and view detailed fitness data for each member.
+ * It includes a bonus feature to display a member's full name with their data.
+ */
 
-#define NUM_MAIN_MENU_ITEMS 3
-#define NUM_TRAINING_STAGES 8
+#include <stdio.h>
+#include <stdlib.h> // For system(), atoi(), atof()
+#include <string.h> // For strcmp(), strcspn(), strtok()
+#include <ctype.h>  // For toupper()
+
+// --- Constants and Global Data ---
 
 #define NUM_MEMBERS 4
-#define NUM_TESTS 7
+#define NUM_FITNESS_TESTS 7
 
-const char* MAIN_MENU[NUM_MAIN_MENU_ITEMS] = {
-    "I. Audition Management",
-    "II. Training",
-    "III. Debut"
+// Structure to hold one member's complete fitness scores
+typedef struct {
+    char nickname[50];
+    float scores[NUM_FITNESS_TESTS];
+} FitnessRecord;
+
+// Global array to store the health scores. It persists between function calls.
+FitnessRecord g_health_scores[NUM_MEMBERS];
+int g_fitness_data_entered = 0; // Flag to check if data has been entered
+
+// Static, predefined data for members and tests
+const char* milliways_members[NUM_MEMBERS][2] = {
+    {"Jiyeon Park", "Ariel"},
+    {"Ethan Smith", "Simba"},
+    {"Helena Silva", "Belle"},
+    {"Liam Wilson", "Aladdin"}
 };
 
-const char* TRAINING_MENU[NUM_TRAINING_STAGES] = {
-    "1. Physical Strength & Knowledge",
-    "2. Self-Management & Teamwork",
-    "3. Language & Pronunciation", "4. Vocal", "5. Dance", "6. Visual & Image",
-    "7. Acting & Stage Performance", "8. Fan Communication"
+const char* FITNESS_TEST_NAMES[NUM_FITNESS_TESTS] = {
+    "1-Mile Run (min)", "100m Sprint (sec)", "30 Push-ups (min)",
+    "50 Squats (min)", "50 Arm Strength Push-ups (min)",
+    "400m Swim (min)", "Bench Press (x bodyweight)"
 };
 
-const char* MILLIWAYS_NAMES[NUM_MEMBERS] = {
-    "Jiyeon Park", "Ethan Smith", "Helena Silva", "Liam Wilson"
-};
-const char* MILLIWAYS_NICKNAMES[NUM_MEMBERS] = {
-    "Ariel", "Simba", "Belle", "Aladdin"
-};
-const char* FITNESS_TEST_NAMES[NUM_TESTS] = {
-    "1-Mile Run (min)", "100m Sprint (sec)", "Push-ups (30 reps/min)", "Squats (50 reps/min)",
-    "Arm Strength (50 reps/min)", "Swimming (400m/min)", "Weightlifting (x bodywt)"
-};
 
-void display_main_menu();
-void display_training_menu(const char status[]);
-void handle_training_menu(char status[], float scores[][NUM_TESTS]);
-void handle_stage1_submenu(char* stage_status, float scores[][NUM_TESTS]);
-void setHealth(float scores[][NUM_TESTS]);
-void parse_and_store_scores(const char* input, float destination_array[]);
-void getHealth(const float scores[][NUM_TESTS]);
+// --- Utility and Core Logic Functions ---
 
-
- 
-int main() {
-    char training_status[NUM_TRAINING_STAGES] = {0};
-    // 2D array to store health scores for each member and each test
-    float health_scores[NUM_MEMBERS][NUM_TESTS] = {{0.0f}};
-    char input_buffer[100];
-    int choice;
-
-    while (1) {
-        display_main_menu();
-        printf("> Select a menu (or 0, q to quit): ");
-        if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL) break;
-        if (strcmp(input_buffer, "\n") == 0 || strcmp(input_buffer, "0\n") == 0 ||
-            strcmp(input_buffer, "q\n") == 0 || strcmp(input_buffer, "Q\n") == 0) {
-            printf("Terminating Magrathea System.\n");
-            break;
-        }
-
-        choice = atoi(input_buffer);
-        switch (choice) {
-            case 1:
-                printf("\nNavigating to [Audition Management]...\n(This feature is not yet implemented.)\n\n");
-                break;
-            case 2:
-                handle_training_menu(training_status, health_scores);
-                break;
-            case 3:
-                printf("\nNavigating to [Debut]...\n(This feature is not yet implemented.)\n\n");
-                break;
-            default:
-                printf("\nInvalid selection. Please try again.\n\n");
-        }
-    }
-    return 0;
+void clear_screen() {
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
 }
 
-void display_main_menu() {
-    printf("####################################\n");
-    printf("#        Magrathea Main Menu       #\n");
-    printf("####################################\n");
-    for (int i = 0; i < NUM_MAIN_MENU_ITEMS; i++) printf("%s\n", MAIN_MENU[i]);
-    printf("------------------------------------\n");
-}
-
-void display_training_menu(const char status[]) {
-    printf("\n####################################\n");
-    printf("#         Training Program         #\n");
-    printf("####################################\n");
-    for (int i = 0; i < NUM_TRAINING_STAGES; i++) {
-        printf("%s", TRAINING_MENU[i]);
-        if (status[i] == 'P') printf(" [PASSED]\n");
-        else if (status[i] == 'F') printf(" [FAILED]\n");
-        else printf("\n");
-    }
-    printf("------------------------------------\n");
-}
-
-
-void handle_training_menu(char status[], float scores[][NUM_TESTS]) {
-    char input_buffer[100];
-    int choice;
-    while (1) {
-        display_training_menu(status);
-        printf("> Select a stage (or 0 to return to main menu): ");
-        if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL) break;
-        if (strcmp(input_buffer, "0\n") == 0) {
-            printf("\nReturning to main menu...\n\n");
-            break;
-        }
-        choice = atoi(input_buffer);
-        if (choice == 1) {
-            // Stage 1 now has its own submenu
-            handle_stage1_submenu(&status[0], scores);
-        } else if (choice > 1 && choice <= NUM_TRAINING_STAGES) {
-            // Other stages can be implemented here later
-            printf("\nThis training stage is not yet implemented.\n");
-        } else {
-            printf("\nInvalid stage. Please select a valid number.\n");
-        }
+/**
+ * @brief The dedicated parsing function for fitness data.
+ * It takes a comma-separated string and populates a float array.
+ * @param input_str The comma-separated string of scores.
+ * @param scores A pointer to the float array to store the parsed scores.
+ */
+void parse_and_store_scores(char* input_str, float* scores) {
+    char* token = strtok(input_str, ",");
+    int i = 0;
+    while (token != NULL && i < NUM_FITNESS_TESTS) {
+        // Use atof (ascii to float) to convert the string token to a number
+        scores[i] = atof(token);
+        token = strtok(NULL, ",");
+        i++;
     }
 }
 
-void handle_stage1_submenu(char* stage_status, float scores[][NUM_TESTS]) {
-    char choice_char;
+/**
+ * @brief Prompts the user to enter fitness data for all members.
+ */
+void setHealth() {
+    clear_screen();
+    printf("========================================\n");
+    printf("      A. Enter Fitness Data\n");
+    printf("========================================\n");
+    printf("Enter the 7 test results for each member as a comma-separated list.\n");
+    printf("e.g., 5.5,12.3,1.2,2.0,2.5,8.0,0.75\n\n");
+
+    char input_buffer[256];
+
+    // Loop through each member to get their data
+    for (int i = 0; i < NUM_MEMBERS; i++) {
+        // Set the nickname in our data structure
+        strcpy(g_health_scores[i].nickname, milliways_members[i][1]);
+
+        printf("Enter scores for %s (%s):\n> ", milliways_members[i][0], milliways_members[i][1]);
+        fgets(input_buffer, sizeof(input_buffer), stdin);
+        input_buffer[strcspn(input_buffer, "\n")] = 0; // Remove newline
+
+        // Parse the input string and store the scores
+        parse_and_store_scores(input_buffer, g_health_scores[i].scores);
+    }
+    
+    g_fitness_data_entered = 1; // Set the flag indicating data is ready
+    printf("\nAll fitness data has been successfully recorded.\n");
+}
+
+/**
+ * @brief Provides various options for viewing the stored fitness data.
+ */
+void getHealth() {
+    clear_screen();
+    printf("========================================\n");
+    printf("      B. View Fitness Data\n");
+    printf("========================================\n");
+
+    if (!g_fitness_data_entered) {
+        printf("No fitness data has been entered yet. Please use option 'A' first.\n");
+        return;
+    }
+
+    char choice_buf[10];
     while(1) {
-        printf("\n--- [Stage 1: Physical Strength & Knowledge] ---\n");
-        printf("A. Enter Fitness Data\n");
-        printf("B. View Fitness Data\n");
-        printf("C. Certify Stage 1 Completion\n");
-        printf("0. Return to Training Menu\n");
-        printf("> Select an option: ");
-        scanf(" %c", &choice_char);
-        while(getchar() != '\n'); // Clear input buffer
+        printf("\n--- View Options ---\n");
+        printf("1. View All Member Data\n");
+        printf("2. View Specific Member's Data (Bonus)\n");
+        printf("3. View Specific Test for a Member\n");
+        printf("0. Back to previous menu\n");
+        printf("Choice: ");
+        
+        fgets(choice_buf, sizeof(choice_buf), stdin);
+        int choice = atoi(choice_buf);
 
-        if (choice_char == '0') break;
+        if (choice == 0) break;
 
-        switch(choice_char) {
-            case 'A': case 'a':
-                setHealth(scores);
-                break;
-            case 'B': case 'b':
-                getHealth(scores);
-                break;
-            case 'C': case 'c':
-                if (*stage_status == 'P') {
-                    printf("\nStage 1 has already been passed.\n");
-                } else {
-                    printf("Did the members pass the certification for Stage 1? (Y/N): ");
-                    scanf(" %c", &choice_char);
-                    while(getchar() != '\n');
-                    if (choice_char == 'Y' || choice_char == 'y') {
-                        *stage_status = 'P';
-                        printf("Result recorded: [PASSED]\n");
-                    } else {
-                        *stage_status = 'F';
-                        printf("Result recorded: [FAILED]\n");
+        char nickname_buf[50];
+        int member_idx = -1;
+
+        switch(choice) {
+            case 1: // View All
+                printf("\n--- Complete Fitness Data for All Members ---\n");
+                for(int i=0; i<NUM_MEMBERS; i++) {
+                    printf("\nMember: %s (%s)\n", milliways_members[i][0], g_health_scores[i].nickname);
+                    for(int j=0; j<NUM_FITNESS_TESTS; j++) {
+                        printf("  - %-30s: %.2f\n", FITNESS_TEST_NAMES[j], g_health_scores[i].scores[j]);
                     }
                 }
                 break;
+
+            case 2: // View by Member (Bonus)
+                printf("Enter nickname to view (e.g., Ariel, Simba): ");
+                fgets(nickname_buf, sizeof(nickname_buf), stdin);
+                nickname_buf[strcspn(nickname_buf, "\n")] = 0;
+
+                member_idx = -1;
+                for(int i=0; i<NUM_MEMBERS; i++){
+                    if(strcmp(nickname_buf, g_health_scores[i].nickname) == 0) {
+                        member_idx = i;
+                        break;
+                    }
+                }
+
+                if(member_idx != -1) {
+                    printf("\n--- Detailed Report ---\n");
+                    printf("Member Name: %s\n", milliways_members[member_idx][0]);
+                    printf("Nickname:    %s\n", g_health_scores[member_idx].nickname);
+                    printf("--------------------------\n");
+                    for(int j=0; j<NUM_FITNESS_TESTS; j++) {
+                        printf("  - %-30s: %.2f\n", FITNESS_TEST_NAMES[j], g_health_scores[member_idx].scores[j]);
+                    }
+                } else {
+                    printf("Member '%s' not found.\n", nickname_buf);
+                }
+                break;
+            
+            case 3: // View Specific Test
+                 printf("Enter nickname to view (e.g., Ariel, Simba): ");
+                 fgets(nickname_buf, sizeof(nickname_buf), stdin);
+                 nickname_buf[strcspn(nickname_buf, "\n")] = 0;
+
+                 member_idx = -1;
+                 for(int i=0; i<NUM_MEMBERS; i++){
+                    if(strcmp(nickname_buf, g_health_scores[i].nickname) == 0) {
+                        member_idx = i;
+                        break;
+                    }
+                 }
+                 if(member_idx != -1) {
+                     printf("Which test result to view? (1-7): ");
+                     fgets(choice_buf, sizeof(choice_buf), stdin);
+                     int test_choice = atoi(choice_buf);
+                     if(test_choice >= 1 && test_choice <= NUM_FITNESS_TESTS) {
+                         printf("\nResult for %s:\n", g_health_scores[member_idx].nickname);
+                         printf("  - %s: %.2f\n", FITNESS_TEST_NAMES[test_choice-1], g_health_scores[member_idx].scores[test_choice-1]);
+                     } else {
+                         printf("Invalid test number.\n");
+                     }
+                 } else {
+                     printf("Member '%s' not found.\n", nickname_buf);
+                 }
+                 break;
+
             default:
-                printf("\nInvalid option. Please choose A, B, C, or 0.\n");
+                printf("Invalid choice.\n");
         }
+        printf("\nPress Enter to return to the view menu...");
+        getchar();
     }
 }
 
 
-void setHealth(float scores[][NUM_TESTS]) {
-    char input_buffer[256];
-    printf("\n--- [Enter Fitness Data] ---\n");
-    printf("Please enter 7 comma-separated values for each member.\n");
-    printf("Order: %s, %s, etc.\n", FITNESS_TEST_NAMES[0], FITNESS_TEST_NAMES[1]);
+// --- Menu System Integration ---
 
-    for (int i = 0; i < NUM_MEMBERS; i++) {
-        printf("\n> Member: %s (%s)\n> Input: ", MILLIWAYS_NAMES[i], MILLIWAYS_NICKNAMES[i]);
-        fgets(input_buffer, sizeof(input_buffer), stdin);
-        parse_and_store_scores(input_buffer, scores[i]);
-    }
-    printf("\nFitness data for all members has been recorded.\n");
-}
-
-
-void parse_and_store_scores(const char* input, float destination_array[]) {
-    sscanf(input, "%f,%f,%f,%f,%f,%f,%f",
-           &destination_array[0], &destination_array[1], &destination_array[2], &destination_array[3],
-           &destination_array[4], &destination_array[5], &destination_array[6]);
-}
-
-
-void getHealth(const float scores[][NUM_TESTS]) {
-    int choice;
-    char nickname_buffer[100];
+/**
+ * @brief This new function provides the menu for Stage 1.
+ */
+void show_physical_strength_menu() {
+    char choice;
     while(1) {
-        printf("\n--- [View Fitness Data] ---\n");
-        printf("1. View All Members' Data\n");
-        printf("2. Find Member by Nickname\n");
-        printf("0. Return to Previous Menu\n");
-        printf("> Select an option: ");
-        scanf("%d", &choice);
-        while(getchar() != '\n');
+        clear_screen();
+        printf("----------------------------------------\n");
+        printf("   Menu: 1. Physical Strength & Knowledge\n");
+        printf("----------------------------------------\n");
+        printf("   A. Enter Fitness Data\n");
+        printf("   B. View Fitness Data\n");
+        printf("   0. Back to Training Menu\n");
+        printf("----------------------------------------\n");
+        printf("Choice: ");
+        
+        choice = getchar();
+        while(getchar() != '\n'); // Clear input buffer
 
-        if(choice == 0) break;
+        if (choice == '0') break;
 
-        if(choice == 1) {
-            printf("\n--- All Members Fitness Data ---\n");
-            
-            printf("%-15s | %-10s |", "Name", "Nickname");
-            for(int i = 0; i < NUM_TESTS; i++) printf(" %-10.10s |", FITNESS_TEST_NAMES[i]);
-            printf("\n");
-            
-            for(int i = 0; i < NUM_MEMBERS; i++) {
-                printf("%-15s | %-10s |", MILLIWAYS_NAMES[i], MILLIWAYS_NICKNAMES[i]);
-                for(int j = 0; j < NUM_TESTS; j++) printf(" %-10.2f |", scores[i][j]);
-                printf("\n");
-            }
+        switch(toupper(choice)) {
+            case 'A':
+                setHealth();
+                break;
+            case 'B':
+                getHealth();
+                break;
+            default:
+                printf("\nInvalid choice. Please try again.\n");
+        }
+        printf("\nPress Enter to continue...");
+        getchar();
+    }
+}
+
+
+/**
+ * @brief The main training menu, modified to call the new sub-menu for Stage 1.
+ */
+void run_training_system() {
+    while (1) {
+        clear_screen();
+        printf("========================================\n");
+        printf("         II. Training Menu\n");
+        printf("========================================\n");
+        printf("   1. Physical Strength & Knowledge\n");
+        printf("   2. Self-Management & Teamwork\n");
+        // ... Other stages would be listed here ...
+        printf("----------------------------------------\n");
+        printf("   0. Return to Main Menu\n");
+        printf("========================================\n");
+        printf("Choice: ");
+        
+        char input_buf[10];
+        fgets(input_buf, sizeof(input_buf), stdin);
+        
+        if (input_buf[0] == '0') break;
+        
+        int choice = atoi(input_buf);
+        if (choice == 1) {
+            show_physical_strength_menu(); // Call the new, dedicated menu
         } else if (choice == 2) {
-            printf("Enter nickname to find: ");
-            fgets(nickname_buffer, sizeof(nickname_buffer), stdin);
-            nickname_buffer[strcspn(nickname_buffer, "\n")] = 0; // Remove newline
-
-            int found_index = -1;
-            for(int i = 0; i < NUM_MEMBERS; i++) {
-                if(strcmp(nickname_buffer, MILLIWAYS_NICKNAMES[i]) == 0) {
-                    found_index = i;
-                    break;
-                }
-            }
-
-            if(found_index != -1) {
-                printf("\n--- Fitness Data for %s ---\n", MILLIWAYS_NAMES[found_index]);
-                printf("Name: %s\n", MILLIWAYS_NAMES[found_index]);
-                printf("Nickname: %s\n", MILLIWAYS_NICKNAMES[found_index]);
-                printf("--------------------------------\n");
-                for(int i = 0; i < NUM_TESTS; i++) {
-                    printf("%-28s: %.2f\n", FITNESS_TEST_NAMES[i], scores[found_index][i]);
-                }
-            } else {
-                printf("Member with nickname '%s' not found.\n", nickname_buffer);
-            }
+             printf("\nThis feature is not yet implemented.\n");
+             printf("Press Enter to continue...");
+             getchar();
         } else {
-            printf("Invalid choice. Please try again.\n");
+            printf("\nInvalid choice. Please select a number from the menu.\n");
+            printf("Press Enter to continue...");
+            getchar();
         }
     }
+}
+
+
+// --- Main Entry Point ---
+
+int main(void) {
+    // This is the main program loop.
+    while (1) {
+        clear_screen();
+        printf("========================================\n");
+        printf("        MAGRATHEA Main Menu\n");
+        printf("========================================\n");
+        printf("   I. Audition Management\n");
+        printf("   II. Training\n");
+        printf("   III. Debut\n");
+        printf("----------------------------------------\n");
+        printf("Enter a menu number, or 'Q' to quit.\n");
+        printf("Choice: ");
+
+        char input_buf[10];
+        fgets(input_buf, sizeof(input_buf), stdin);
+        input_buf[strcspn(input_buf, "\n")] = 0;
+
+        if (strlen(input_buf) == 0 || strcmp(input_buf, "0") == 0 || toupper(input_buf[0]) == 'Q') {
+            break;
+        }
+
+        if (strcmp(input_buf, "II") == 0 || strcmp(input_buf, "2") == 0) {
+            run_training_system();
+        } else {
+            printf("\nThis feature is not yet implemented.\n");
+            printf("Press Enter to continue...");
+            getchar();
+        }
+    }
+
+    printf("\nExiting Magrathea System. Goodbye!\n");
+    return 0;
 }
