@@ -1,208 +1,224 @@
+/**
+ * @file stage2.c
+ * @brief A module for Self-Management and Teamwork training, including Mentoring.
+ *
+ * This file implements the logic for the mentoring feature, which matches
+ * trainees with available mentors. The core logic uses a shuffling algorithm
+ * to ensure a fair, random, and unique 1:1 pairing, fulfilling the bonus
+ * requirement.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+// --- Constants and Data Structures ---
 
-#define BONUS_MATCHING 1
-
-#define NUM_MAIN_MENU_ITEMS 3
-#define NUM_TRAINING_STAGES 8
-#define NUM_TRAINEES 4 // Milliways has 4 members
+#define NUM_MEMBERS 4
 #define MAX_MENTORS 8
-#define MAX_NAME_LEN 50
 
-
-struct Mentor {
-    int id;
-    char name[MAX_NAME_LEN];
-    int mentee_list_number; 
+// From Course 1, for reference
+const char* milliways_members[NUM_MEMBERS][2] = {
+    {"Jiyeon Park", "Ariel"},
+    {"Ethan Smith", "Simba"},
+    {"Helena Silva", "Belle"},
+    {"Liam Wilson", "Aladdin"}
 };
 
-const char* MILLIWAYS_NICKNAMES[NUM_TRAINEES] = {"Ariel", "Simba", "Belle", "Aladdin"};
+// Structure to hold generated data for a trainee
+typedef struct {
+    char nickname[50];
+    int ascii_sum;
+    int ability_score;
+} TraineeData;
 
-void display_main_menu();
-void handle_training_menu();
-void matchMentoring();
-int parseIntMember(const char* nickname);
-int getRandomAbility();
-void initializeTrainees(int data[][2]);
-void inputMentors(struct Mentor list[], int* mentor_count);
-void randomMatching(int trainees[][2], struct Mentor mentors[], int num_mentors);
-void displayMatches(const struct Mentor mentors[], int num_mentors, int trainees[][2]);
+// Structure to hold information about a single mentor
+typedef struct {
+    int id;
+    char name[100];
+    char assigned_mentee_nickname[50]; // To store the matching result
+} Mentor;
 
-int main() {
-    char input_buffer[100];
-    int choice;
 
-    srand(time(NULL));
+// --- Utility and Core Logic Functions ---
 
-    while (1) {
-        display_main_menu();
-        printf("> Select a menu (or 0, q to quit): ");
-        if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL) break;
-        if (strcmp(input_buffer, "\n") == 0 || strcmp(input_buffer, "0\n") == 0 ||
-            strcmp(input_buffer, "q\n") == 0 || strcmp(input_buffer, "Q\n") == 0) {
-            printf("Terminating Magrathea System.\n");
-            break;
-        }
-        choice = atoi(input_buffer);
-        switch (choice) {
-            case 1: printf("\n(Audition Management is not yet implemented.)\n\n"); break;
-            case 2: handle_training_menu(); break;
-            case 3: printf("\n(Debut is not yet implemented.)\n\n"); break;
-            default: printf("\nInvalid selection. Please try again.\n\n");
-        }
-    }
-    return 0;
+void clear_screen() {
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
 }
 
-
-void display_main_menu() {
-    printf("####################################\n");
-    printf("#        Magrathea Main Menu       #\n");
-    printf("####################################\n");
-    printf("I. Audition Management\n");
-    printf("II. Training\n");
-    printf("III. Debut\n");
-    printf("------------------------------------\n");
-}
-
-void handle_training_menu() {
-    char choice_char;
-    printf("\n--- [II. Training] ---\n");
-    printf("Selected Stage: 2. Self-Management & Teamwork\n");
-    printf("--------------------------------------------\n");
-    printf("A. Mentoring\n");
-    printf("0. Return to Main Menu\n");
-    printf("> Select an option: ");
-    scanf(" %c", &choice_char);
-    while (getchar() != '\n'); 
-
-    if (choice_char == 'A' || choice_char == 'a') {
-        matchMentoring();
-    }
-}
-
-void matchMentoring() {
-    int trainee_data[NUM_TRAINEES][2];
-    struct Mentor mentor_list[MAX_MENTORS];
-    int num_mentors = 0;
-
-    printf("\n--- [A. Mentoring] ---\n");
-
-    initializeTrainees(trainee_data);
-    printf("Step 1: Trainee data has been initialized.\n");
-
-    inputMentors(mentor_list, &num_mentors);
-    printf("Step 2: %d mentors have been registered.\n", num_mentors);
-
-    randomMatching(trainee_data, mentor_list, num_mentors);
-    printf("Step 3: Mentor-mentee matching is complete.\n");
-
-
-    displayMatches(mentor_list, num_mentors, trainee_data);
-}
-
-
+/**
+ * @brief Converts a trainee's nickname into a summed ASCII code integer.
+ * @param nickname The nickname string to parse.
+ * @return The sum of the ASCII values of all characters in the nickname.
+ */
 int parseIntMember(const char* nickname) {
     int sum = 0;
     for (int i = 0; nickname[i] != '\0'; i++) {
-        sum += nickname[i];
+        sum += (int)nickname[i];
     }
     return sum;
 }
 
-
+/**
+ * @brief Generates a random ability score for a trainee.
+ * @return A random integer between 100 and 1000.
+ */
 int getRandomAbility() {
-    return 100 + rand() % 901; 
+    return (rand() % 901) + 100; // Generates a number from 100 to 1000
 }
 
-void initializeTrainees(int data[][2]) {
-    for (int i = 0; i < NUM_TRAINEES; i++) {
-        data[i][0] = parseIntMember(MILLIWAYS_NICKNAMES[i]);
-        data[i][1] = getRandomAbility();
-    }
-}
-
-void inputMentors(struct Mentor list[], int* mentor_count) {
-    printf("\n--- Register Mentors ---\n");
-    do {
-        printf("How many mentors to register? (1-%d): ", BONUS_MATCHING ? NUM_TRAINEES : MAX_MENTORS);
-        scanf("%d", mentor_count);
-        while (getchar() != '\n');
-        if (BONUS_MATCHING && *mentor_count != NUM_TRAINEES) {
-            printf("Error: For 1:1 matching, mentor count must be exactly %d.\n", NUM_TRAINEES);
-        }
-    } while (*mentor_count <= 0 || (BONUS_MATCHING && *mentor_count != NUM_TRAINEES) || (!BONUS_MATCHING && *mentor_count > MAX_MENTORS));
-
-    for (int i = 0; i < *mentor_count; i++) {
-        list[i].id = i + 1;
-        list[i].mentee_list_number = 0; 
-        printf("Enter name for Mentor ID %d: ", list[i].id);
-        fgets(list[i].name, MAX_NAME_LEN, stdin);
-        list[i].name[strcspn(list[i].name, "\n")] = 0; 
-    }
-}
-
-
-void randomMatching(int trainees[][2], struct Mentor mentors[], int num_mentors) {
-#if BONUS_MATCHING == 1
-
-    printf("Info: Using bonus 1:1 matching algorithm.\n");
-
-    for (int i = NUM_TRAINEES - 1; i > 0; i--) {
+/**
+ * @brief Shuffles an array of pointers to Mentor structs. (Fisher-Yates shuffle)
+ * This is key to guaranteeing a random, 1:1 match.
+ * @param array The array of Mentor pointers to shuffle.
+ * @param n The number of elements in the array.
+ */
+void shuffle_mentor_pointers(Mentor** array, int n) {
+    for (int i = n - 1; i > 0; i--) {
         int j = rand() % (i + 1);
-
-        int temp_id = trainees[i][0];
-        int temp_ability = trainees[i][1];
-        trainees[i][0] = trainees[j][0];
-        trainees[i][1] = trainees[j][1];
-        trainees[j][0] = temp_id;
-        trainees[j][1] = temp_ability;
+        Mentor* temp = array[i];
+        array[i] = array[j];
+        array[j] = temp;
     }
-
-    for (int i = 0; i < num_mentors; i++) {
-        mentors[i].mentee_list_number = trainees[i][0];
-    }
-#else
-    
-    printf("Info: Using simple modulo matching algorithm.\n");
-    for (int i = 0; i < NUM_TRAINEES; i++) {
-        int trainee_id_num = trainees[i][0];
-        int target_mentor_index = trainee_id_num % num_mentors;
-        
-        if (mentors[target_mentor_index].mentee_list_number != 0) {
-
-            printf("Warning: Mentor '%s' (ID %d) is being assigned a new mentee, replacing a previous one.\n", 
-                   mentors[target_mentor_index].name, mentors[target_mentor_index].id);
-        }
-        mentors[target_mentor_index].mentee_list_number = trainee_id_num;
-    }
-#endif
 }
 
-void displayMatches(const struct Mentor mentors[], int num_mentors, int trainees[][2]) {
-    printf("\n--- Mentor-Mentee Matching Results ---\n");
-    printf("=======================================\n");
-    printf("%-10s | %-20s | %-20s\n", "Mentor ID", "Mentor Name", "Assigned Mentee");
-    printf("--------------------------------------------------\n");
 
-    for (int i = 0; i < num_mentors; i++) {
-        printf("%-10d | %-20s | ", mentors[i].id, mentors[i].name);
-        if (mentors[i].mentee_list_number == 0) {
-            printf("%-20s\n", "No mentee assigned");
-        } else {
+/**
+ * @brief The main function for the Mentoring feature.
+ */
+void matchMentoring() {
+    clear_screen();
+    printf("========================================\n");
+    printf("      A. Mentoring Matching\n");
+    printf("========================================\n");
 
-            char mentee_nickname[MAX_NAME_LEN] = "Unknown";
-            for (int j = 0; j < NUM_TRAINEES; j++) {
-                if (trainees[j][0] == mentors[i].mentee_list_number) {
-                    strcpy(mentee_nickname, MILLIWAYS_NICKNAMES[j]);
-                    break;
-                }
+    // 1. Initialize Trainee Data
+    TraineeData trainees[NUM_MEMBERS];
+    printf("Initializing trainee data...\n");
+    for (int i = 0; i < NUM_MEMBERS; i++) {
+        strcpy(trainees[i].nickname, milliways_members[i][1]);
+        trainees[i].ascii_sum = parseIntMember(trainees[i].nickname);
+        trainees[i].ability_score = getRandomAbility();
+    }
+    printf("Trainee data successfully generated.\n\n");
+
+    // 2. Input Mentor Data from the user
+    Mentor mentors[MAX_MENTORS];
+    int mentor_count = 0;
+    char name_buffer[100];
+
+    printf("--- Enter Mentor Information (up to %d mentors) ---\n", MAX_MENTORS);
+    printf("Type 'done' when you are finished entering names.\n");
+    while (mentor_count < MAX_MENTORS) {
+        printf("Enter name for Mentor %d: ", mentor_count + 1);
+        fgets(name_buffer, sizeof(name_buffer), stdin);
+        name_buffer[strcspn(name_buffer, "\n")] = 0; // Remove newline
+
+        if (strcmp(name_buffer, "done") == 0) {
+            if (mentor_count < NUM_MEMBERS) {
+                printf("Error: You must enter at least %d mentors to match all trainees.\n", NUM_MEMBERS);
+                continue; // Prompt again
             }
-            printf("%-20s\n", mentee_nickname);
+            break; // Exit loop
+        }
+        
+        mentors[mentor_count].id = mentor_count + 1;
+        strcpy(mentors[mentor_count].name, name_buffer);
+        strcpy(mentors[mentor_count].assigned_mentee_nickname, "None"); // Initialize
+        mentor_count++;
+    }
+
+    // --- (Bonus) 1:1 Random Matching ---
+    printf("\nPerforming 1:1 random matching...\n");
+    
+    // Create an array of pointers to our mentors
+    Mentor* mentor_pointers[mentor_count];
+    for(int i=0; i < mentor_count; i++) {
+        mentor_pointers[i] = &mentors[i];
+    }
+    
+    // Shuffle the array of pointers
+    shuffle_mentor_pointers(mentor_pointers, mentor_count);
+    
+    // Assign the first N shuffled mentors to the N trainees
+    for(int i=0; i < NUM_MEMBERS; i++) {
+        strcpy(mentor_pointers[i]->assigned_mentee_nickname, trainees[i].nickname);
+    }
+    
+    printf("Matching complete!\n");
+
+    // 4. Output the results
+    printf("\n========================================\n");
+    printf("          Mentoring Pairings\n");
+    printf("========================================\n");
+    printf("| %-5s | %-15s | %-10s | %-20s |\n", "#", "Trainee", "Mentor ID", "Mentor Name");
+    printf("----------------------------------------------------------\n");
+    
+    for (int i = 0; i < NUM_MEMBERS; i++) {
+        // The i-th trainee is matched with the i-th mentor from the shuffled list
+        printf("| %-5d | %-15s | %-10d | %-20s |\n",
+            i + 1,
+            trainees[i].nickname,
+            mentor_pointers[i]->id,
+            mentor_pointers[i]->name
+        );
+    }
+    printf("----------------------------------------------------------\n");
+    
+    printf("\nPress Enter to return to the menu...");
+    getchar();
+}
+
+
+// --- Menu System ---
+// This would be part of a larger menu system in a real project.
+
+void show_self_mgmt_menu() {
+    char choice;
+    while(1) {
+        clear_screen();
+        printf("----------------------------------------\n");
+        printf("   Menu: 2. Self-Management & Teamwork\n");
+        printf("----------------------------------------\n");
+        printf("   A. Mentoring\n");
+        printf("   0. Back to Training Menu\n");
+        printf("----------------------------------------\n");
+        printf("Choice: ");
+        
+        choice = getchar();
+        while(getchar() != '\n'); // Clear input buffer
+
+        if (choice == '0') break;
+
+        switch(toupper(choice)) {
+            case 'A':
+                matchMentoring();
+                break;
+            default:
+                printf("\nInvalid choice. Please try again.\n");
+                printf("Press Enter to continue...");
+                getchar();
         }
     }
-    printf("=======================================\n\n");
+}
+
+// Dummy functions for context, assuming they exist elsewhere
+void run_training_system() {
+    show_self_mgmt_menu();
+}
+
+int main(void) {
+    // Seed the random number generator once at the start of the program
+    srand(time(NULL));
+
+    // For this standalone example, we'll just call the main feature.
+    // In the full project, this would be part of the main menu loop.
+    run_training_system();
+
+    return 0;
 }
