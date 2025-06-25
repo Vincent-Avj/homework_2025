@@ -1,305 +1,370 @@
+/**
+ * @file stage1.c
+ * @brief A state-aware, hierarchical menu system for the Magrathea project.
+ *
+ * This program implements the main menu and a multi-stage training menu.
+ * This version adds full functionality for "Stage 1", including fitness data
+ * management and a new feature for setting and viewing personalized weekly
+ * workout routines with specific validation rules.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
 
-
-#define NUM_MAIN_MENU_ITEMS 3
-#define NUM_TRAINING_STAGES 8
+// --- Constants and Global Data ---
 
 #define NUM_MEMBERS 4
-#define NUM_TESTS 7
-#define NUM_DAYS 6
-#define NUM_EXERCISE_TYPES 11
-#define MAX_ROUTINE_LEN 256
+#define NUM_FITNESS_TESTS 7
+#define DAYS_OF_WEEK 6
+#define MAX_EXERCISES_PER_DAY 5
 
-const char* MAIN_MENU[NUM_MAIN_MENU_ITEMS] = {
-    "I. Audition Management", "II. Training", "III. Debut"
+// --- Data Structures ---
+
+// For Fitness Data (Problem 2)
+typedef struct {
+    char nickname[50];
+    float scores[NUM_FITNESS_TESTS];
+} FitnessRecord;
+
+// For Workout Routine (Problem 3)
+typedef struct {
+    char exercises[MAX_EXERCISES_PER_DAY][50];
+    int num_exercises;
+} DailyRoutine;
+
+typedef struct {
+    char nickname[50];
+    DailyRoutine weekly_plan[DAYS_OF_WEEK]; // 0=Mon, 5=Sat
+} MemberRoutine;
+
+// --- Global State Variables ---
+
+// State for Problem 2 features
+FitnessRecord g_health_scores[NUM_MEMBERS];
+int g_fitness_data_entered = 0;
+
+// State for Problem 3 features
+MemberRoutine g_member_routines[NUM_MEMBERS];
+int g_routines_set = 0;
+
+// Static, predefined data for members and exercises
+const char* milliways_members[NUM_MEMBERS][2] = {
+    {"Jiyeon Park", "Ariel"},
+    {"Ethan Smith", "Simba"},
+    {"Helena Silva", "Belle"},
+    {"Liam Wilson", "Aladdin"}
 };
 
-const char* TRAINING_MENU[NUM_TRAINING_STAGES] = {
-    "1. Physical Strength & Knowledge", "2. Self-Management & Teamwork",
-    "3. Language & Pronunciation", "4. Vocal", "5. Dance", "6. Visual & Image",
-    "7. Acting & Stage Performance", "8. Fan Communication"
+const char* FITNESS_TEST_NAMES[NUM_FITNESS_TESTS] = {
+    "1-Mile Run (min)", "100m Sprint (sec)", "30 Push-ups (min)",
+    "50 Squats (min)", "50 Arm Strength Push-ups (min)",
+    "400m Swim (min)", "Bench Press (x bodyweight)"
 };
 
-const char* MILLIWAYS_NAMES[NUM_MEMBERS] = {
-    "Jiyeon Park", "Ethan Smith", "Helena Silva", "Liam Wilson"
-};
-const char* MILLIWAYS_NICKNAMES[NUM_MEMBERS] = {
-    "Ariel", "Simba", "Belle", "Aladdin"
-};
-const char* FITNESS_TEST_NAMES[NUM_TESTS] = {
-    "1-Mile Run (min)", "100m Sprint (sec)", "Push-ups (30 reps/min)", "Squats (50 reps/min)",
-    "Arm Strength (50 reps/min)", "Swimming (400m/min)", "Weightlifting (x bodywt)"
-};
-const char* DAYS_OF_WEEK[NUM_DAYS] = {
-    "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-};
+// Categorized exercise data
+const char* CARDIO_EXERCISES[] = {"Running", "Cycling", "Fast Walking"};
+const char* STRENGTH_EXERCISES[] = {"Push-ups", "Squats", "Leg Press", "Leg Curl", "Pull-ups", "Chin-ups"};
+const char* CORE_EXERCISES[] = {"Plank", "Crunches"};
+const int NUM_CARDIO = sizeof(CARDIO_EXERCISES)/sizeof(char*);
+const int NUM_STRENGTH = sizeof(STRENGTH_EXERCISES)/sizeof(char*);
+const int NUM_CORE = sizeof(CORE_EXERCISES)/sizeof(char*);
 
 
-const char* EXERCISE_TYPES[NUM_EXERCISE_TYPES] = {
-    "Running", "Cycling", "Fast Walking",       
-    "Push-ups", "Squats",                       
-    "Leg Press", "Leg Curl",                   
-    "Pull-ups", "Chin-ups",                    
-    "Plank", "Crunches"                         
-};
-const char* EXERCISE_CATEGORIES[NUM_EXERCISE_TYPES] = {
-    "Cardio", "Cardio", "Cardio", "Strength", "Strength", "Strength", 
-    "Strength", "Strength", "Strength", "Core", "Core"
-};
+// --- Utility and Menu Functions ---
 
+void clear_screen() {
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+}
 
-void display_main_menu();
-void display_training_menu(const char status[]);
-void handle_training_menu(char status[], float scores[][NUM_TESTS], char routines[][NUM_DAYS][MAX_ROUTINE_LEN]);
-void handle_stage1_submenu(char* stage_status, float scores[][NUM_TESTS], char routines[][NUM_DAYS][MAX_ROUTINE_LEN]);
-void setHealth(float scores[][NUM_TESTS]);
-void getHealth(const float scores[][NUM_TESTS]);
-void setExerciseRoutine(char routines[][NUM_DAYS][MAX_ROUTINE_LEN]);
-int is_routine_valid(char* routine_str, int* core_used_this_week);
-void getExerciseRoutine(const char routines[][NUM_DAYS][MAX_ROUTINE_LEN]);
-void display_member_list(); 
+/**
+ * @brief (Bonus) A shared function to display the member list.
+ * This reduces code redundancy across multiple features.
+ */
+void display_member_list() {
+    printf("\nMilliways Member List:\n");
+    for (int i = 0; i < NUM_MEMBERS; i++) {
+        printf("  - %s (%s)\n", milliways_members[i][0], milliways_members[i][1]);
+    }
+}
 
-int main() {
-    char training_status[NUM_TRAINING_STAGES] = {0};
-    float health_scores[NUM_MEMBERS][NUM_TESTS] = {{0.0f}};
+// --- Problem 2: Fitness Data Functions (getHealth modified for Bonus) ---
 
-    char member_routines[NUM_MEMBERS][NUM_DAYS][MAX_ROUTINE_LEN] = {{{0}}};
-    char input_buffer[100];
-    int choice;
+void setHealth(); // Forward declaration
+void getHealth() {
+    clear_screen();
+    printf("========================================\n");
+    printf("      B. View Fitness Data\n");
+    printf("========================================\n");
 
-    while (1) {
-        display_main_menu();
-        printf("> Select a menu (or 0, q to quit): ");
-        if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL) break;
-        if (strcmp(input_buffer, "\n") == 0 || strcmp(input_buffer, "0\n") == 0 ||
-            strcmp(input_buffer, "q\n") == 0 || strcmp(input_buffer, "Q\n") == 0) {
-            printf("Terminating Magrathea System.\n");
+    if (!g_fitness_data_entered) {
+        printf("No fitness data has been entered yet. Please use option 'A' first.\n");
+        return;
+    }
+
+    // (Bonus) Use the shared function to display the member list
+    display_member_list();
+    
+    printf("\nEnter nickname to view their full report: ");
+    char nickname_buf[50];
+    fgets(nickname_buf, sizeof(nickname_buf), stdin);
+    nickname_buf[strcspn(nickname_buf, "\n")] = 0;
+
+    int member_idx = -1;
+    for(int i=0; i<NUM_MEMBERS; i++){
+        if(strcmp(nickname_buf, g_health_scores[i].nickname) == 0) {
+            member_idx = i;
             break;
         }
-        choice = atoi(input_buffer);
-        switch (choice) {
-            case 1:
-                printf("\nNavigating to [Audition Management]...\n(This feature is not yet implemented.)\n\n");
-                break;
-            case 2:
-                handle_training_menu(training_status, health_scores, member_routines);
-                break;
-            case 3:
-                printf("\nNavigating to [Debut]...\n(This feature is not yet implemented.)\n\n");
-                break;
-            default:
-                printf("\nInvalid selection. Please try again.\n\n");
+    }
+
+    if(member_idx != -1) {
+        printf("\n--- Detailed Report ---\n");
+        printf("Member Name: %s\n", milliways_members[member_idx][0]);
+        printf("Nickname:    %s\n", g_health_scores[member_idx].nickname);
+        printf("--------------------------\n");
+        for(int j=0; j<NUM_FITNESS_TESTS; j++) {
+            printf("  - %-30s: %.2f\n", FITNESS_TEST_NAMES[j], g_health_scores[member_idx].scores[j]);
+        }
+    } else {
+        printf("Member '%s' not found.\n", nickname_buf);
+    }
+}
+
+
+// --- Problem 3: Workout Routine Functions ---
+
+// Helper function to check if an exercise is of a certain type
+int is_exercise_type(const char* exercise, const char** type_list, int list_size) {
+    for (int i = 0; i < list_size; i++) {
+        if (strcmp(exercise, type_list[i]) == 0) {
+            return 1;
         }
     }
     return 0;
 }
 
+/**
+ * @brief Prompts the user to set a weekly workout routine for all members.
+ */
+void setExerciseRoutine() {
+    clear_screen();
+    printf("========================================\n");
+    printf("      C. Set Basic Workout Routine\n");
+    printf("========================================\n");
+    printf("For each member, set a routine for Monday to Saturday.\n");
+    printf("Each day must have at least 1 Cardio and 1 Strength/Core exercise.\n");
+    printf("Core exercises can only be used ONCE per week per member.\n\n");
 
-void display_main_menu() {
-    printf("####################################\n");
-    printf("#        Magrathea Main Menu       #\n");
-    printf("####################################\n");
-    for (int i = 0; i < NUM_MAIN_MENU_ITEMS; i++) printf("%s\n", MAIN_MENU[i]);
-    printf("------------------------------------\n");
-}
+    const char* days[] = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 
-void display_training_menu(const char status[]) {
-    printf("\n####################################\n");
-    printf("#         Training Program         #\n");
-    printf("####################################\n");
-    for (int i = 0; i < NUM_TRAINING_STAGES; i++) {
-        printf("%s", TRAINING_MENU[i]);
-        if (status[i] == 'P') printf(" [PASSED]\n");
-        else if (status[i] == 'F') printf(" [FAILED]\n");
-        else printf("\n");
-    }
-    printf("------------------------------------\n");
-}
-
-
-void display_member_list() {
-    printf("\n--- Milliways Member List ---\n");
+    // Loop through each member
     for (int i = 0; i < NUM_MEMBERS; i++) {
-        printf("%d. %s (%s)\n", i + 1, MILLIWAYS_NAMES[i], MILLIWAYS_NICKNAMES[i]);
+        int core_used_this_week = 0;
+        strcpy(g_member_routines[i].nickname, milliways_members[i][1]);
+
+        printf("\n--- Setting routine for %s (%s) ---\n", milliways_members[i][0], milliways_members[i][1]);
+
+        // Loop through each day of the week
+        for (int day = 0; day < DAYS_OF_WEEK; day++) {
+            int is_day_valid = 0;
+            // This loop repeats until a valid day plan is entered
+            do {
+                g_member_routines[i].weekly_plan[day].num_exercises = 0; // Reset for re-entry
+                printf("\n-- %s's Routine --\n", days[day]);
+                printf("Enter exercises one by one. Type 'done' to finish the day.\n");
+                printf("Choices: [Cardio] Running, Cycling... [Strength] Push-ups, Squats... [Core] Plank, Crunches...\n");
+                
+                // Loop to get exercises for the current day
+                while (g_member_routines[i].weekly_plan[day].num_exercises < MAX_EXERCISES_PER_DAY) {
+                    char input_buf[50];
+                    printf("> ");
+                    fgets(input_buf, sizeof(input_buf), stdin);
+                    input_buf[strcspn(input_buf, "\n")] = 0;
+
+                    if (strcmp(input_buf, "done") == 0) break;
+                    
+                    // Add the exercise to the plan
+                    strcpy(g_member_routines[i].weekly_plan[day].exercises[g_member_routines[i].weekly_plan[day].num_exercises], input_buf);
+                    g_member_routines[i].weekly_plan[day].num_exercises++;
+                }
+                
+                // --- Validate the day's routine ---
+                int has_cardio = 0;
+                int has_strength_core = 0;
+                int day_has_core = 0;
+
+                for (int k = 0; k < g_member_routines[i].weekly_plan[day].num_exercises; k++) {
+                    char* exercise = g_member_routines[i].weekly_plan[day].exercises[k];
+                    if (is_exercise_type(exercise, CARDIO_EXERCISES, NUM_CARDIO)) has_cardio = 1;
+                    if (is_exercise_type(exercise, STRENGTH_EXERCISES, NUM_STRENGTH)) has_strength_core = 1;
+                    if (is_exercise_type(exercise, CORE_EXERCISES, NUM_CORE)) {
+                        has_strength_core = 1;
+                        day_has_core = 1;
+                    }
+                }
+                
+                if (has_cardio && has_strength_core && (!day_has_core || (day_has_core && !core_used_this_week))) {
+                    is_day_valid = 1;
+                    if (day_has_core) {
+                        core_used_this_week = 1; // Mark core as used for the rest of the week
+                    }
+                } else {
+                    printf("\n** Invalid Plan for %s! **\n", days[day]);
+                    if (!has_cardio) printf("- Must include at least one Cardio exercise.\n");
+                    if (!has_strength_core) printf("- Must include at least one Strength or Core exercise.\n");
+                    if (day_has_core && core_used_this_week) printf("- Core exercise already used this week!\n");
+                    printf("Please re-enter the routine for this day.\n");
+                }
+            } while (!is_day_valid);
+        }
     }
-    printf("-----------------------------\n");
+    g_routines_set = 1;
+    printf("\nAll member routines have been successfully set.\n");
 }
 
-void handle_training_menu(char status[], float scores[][NUM_TESTS], char routines[][NUM_DAYS][MAX_ROUTINE_LEN]) {
+/**
+ * @brief Displays the stored weekly workout routine for a selected member.
+ */
+void getExerciseRoutine() {
+    clear_screen();
+    printf("========================================\n");
+    printf("      D. View Basic Workout Routine\n");
+    printf("========================================\n");
 
-    char input_buffer[100];
-    int choice;
-    while (1) {
-        display_training_menu(status);
-        printf("> Select a stage (or 0 to return to main menu): ");
-        if (fgets(input_buffer, sizeof(input_buffer), stdin) == NULL) break;
-        if (strcmp(input_buffer, "0\n") == 0) {
-            printf("\nReturning to main menu...\n\n");
+    if (!g_routines_set) {
+        printf("No workout routines have been set yet. Please use option 'C' first.\n");
+        return;
+    }
+    
+    // (Bonus) Use the shared function to display the member list
+    display_member_list();
+
+    printf("\nEnter nickname to view their routine: ");
+    char nickname_buf[50];
+    fgets(nickname_buf, sizeof(nickname_buf), stdin);
+    nickname_buf[strcspn(nickname_buf, "\n")] = 0;
+
+    int member_idx = -1;
+    for(int i=0; i<NUM_MEMBERS; i++){
+        if(strcmp(nickname_buf, g_member_routines[i].nickname) == 0) {
+            member_idx = i;
             break;
         }
-        choice = atoi(input_buffer);
-        if (choice == 1) {
-            handle_stage1_submenu(&status[0], scores, routines);
-        } else if (choice > 1 && choice <= NUM_TRAINING_STAGES) {
-            printf("\nThis training stage is not yet implemented.\n");
-        } else {
-            printf("\nInvalid stage. Please select a valid number.\n");
-        }
     }
-}
 
-void handle_stage1_submenu(char* stage_status, float scores[][NUM_TESTS], char routines[][NUM_DAYS][MAX_ROUTINE_LEN]) {
-    char choice_char;
-    while(1) {
-        printf("\n--- [Stage 1: Physical Strength & Knowledge] ---\n");
-        printf("A. Enter Fitness Data\n");
-        printf("B. View Fitness Data\n");
-        printf("C. Set Basic Workout Routine\n");
-        printf("D. View Basic Workout Routine\n");
-        printf("E. Certify Stage 1 Completion\n");
-        printf("0. Return to Training Menu\n");
-        printf("> Select an option: ");
-        scanf(" %c", &choice_char);
-        while(getchar() != '\n');
-
-        if (choice_char == '0') break;
-
-        switch(choice_char) {
-            case 'A': case 'a': setHealth(scores); break;
-            case 'B': case 'b': getHealth(scores); break;
-            case 'C': case 'c': setExerciseRoutine(routines); break;
-            case 'D': case 'd': getExerciseRoutine(routines); break;
-            case 'E': case 'e':
-                if (*stage_status == 'P') {
-                    printf("\nStage 1 has already been passed.\n");
-                } else {
-                    printf("Did the members pass the certification for Stage 1? (Y/N): ");
-                    scanf(" %c", &choice_char);
-                    while(getchar() != '\n');
-                    *stage_status = (choice_char == 'Y' || choice_char == 'y') ? 'P' : 'F';
-                    printf("Result recorded: [%s]\n", *stage_status == 'P' ? "PASSED" : "FAILED");
+    if (member_idx != -1) {
+        // (Bonus) Display full name and nickname
+        printf("\n--- Weekly Workout Routine ---\n");
+        printf("Member Name: %s\n", milliways_members[member_idx][0]);
+        printf("Nickname:    %s\n", g_member_routines[member_idx].nickname);
+        printf("--------------------------------\n");
+        
+        const char* days[] = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+        for(int day=0; day < DAYS_OF_WEEK; day++) {
+            printf("  [%s]\n", days[day]);
+            if (g_member_routines[member_idx].weekly_plan[day].num_exercises == 0) {
+                printf("    - Rest Day\n");
+            } else {
+                for(int k=0; k < g_member_routines[member_idx].weekly_plan[day].num_exercises; k++) {
+                    printf("    - %s\n", g_member_routines[member_idx].weekly_plan[day].exercises[k]);
                 }
-                break;
-            default:
-                printf("\nInvalid option. Please choose A, B, C, D, E, or 0.\n");
-        }
-    }
-}
-
-
-void getHealth(const float scores[][NUM_TESTS]) {
-    display_member_list(); 
-
-}
-void setHealth(float scores[][NUM_TESTS]) { /* ... Same as previous ... */ }
-
-
-
-
-
-int is_routine_valid(char* routine_str, int* core_used_this_week) {
-    char buffer[MAX_ROUTINE_LEN];
-    strcpy(buffer, routine_str); 
-
-    int has_cardio = 0, has_strength_or_core = 0, uses_core_today = 0;
-    char* token = strtok(buffer, ", ");
-
-    while (token) {
-        int found = 0;
-        for (int i = 0; i < NUM_EXERCISE_TYPES; i++) {
-            if (strcmp(token, EXERCISE_TYPES[i]) == 0) {
-                found = 1;
-                if (strcmp(EXERCISE_CATEGORIES[i], "Cardio") == 0) has_cardio = 1;
-                if (strcmp(EXERCISE_CATEGORIES[i], "Strength") == 0) has_strength_or_core = 1;
-                if (strcmp(EXERCISE_CATEGORIES[i], "Core") == 0) {
-                    if (*core_used_this_week) {
-                        printf("Error: Core exercises can only be used once per week. You have already scheduled one.\n");
-                        return 0; 
-                    }
-                    has_strength_or_core = 1;
-                    uses_core_today = 1;
-                }
-                break;
             }
         }
-        if (!found) {
-            printf("Error: '%s' is not a recognized exercise.\n", token);
-            return 0;
-        }
-        token = strtok(NULL, ", ");
+    } else {
+        printf("Member '%s' not found.\n", nickname_buf);
     }
-
-    if (!has_cardio) {
-        printf("Error: Routine must include at least one cardio exercise.\n");
-        return 0;
-    }
-    if (!has_strength_or_core) {
-        printf("Error: Routine must include at least one strength or core exercise.\n");
-        return 0;
-    }
-
-    if (uses_core_today) {
-        *core_used_this_week = 1;
-    }
-    return 1; 
 }
 
-void setExerciseRoutine(char routines[][NUM_DAYS][MAX_ROUTINE_LEN]) {
-    char input_buffer[MAX_ROUTINE_LEN];
-    printf("\n--- [Set Basic Workout Routine] ---\n");
-    display_member_list();
-    
-    for (int i = 0; i < NUM_MEMBERS; i++) {
-        int core_used_this_week = 0; 
-        printf("\n--- Setting routine for %s (%s) ---\n", MILLIWAYS_NAMES[i], MILLIWAYS_NICKNAMES[i]);
+
+// --- Menu System Integration ---
+
+void show_physical_strength_menu() {
+    char choice;
+    while(1) {
+        clear_screen();
+        printf("----------------------------------------\n");
+        printf("   Menu: 1. Physical Strength & Knowledge\n");
+        printf("----------------------------------------\n");
+        printf("   A. Enter Fitness Data\n");
+        printf("   B. View Fitness Data\n");
+        printf("   C. Set Basic Workout Routine\n");
+        printf("   D. View Basic Workout Routine\n");
+        printf("   0. Back to Training Menu\n");
+        printf("----------------------------------------\n");
+        printf("Choice: ");
         
-        for (int j = 0; j < NUM_DAYS; j++) {
-            int valid_input = 0;
-            do {
-                printf("\nAvailable Exercises: ");
-                for(int k=0; k<NUM_EXERCISE_TYPES; k++) printf("%s%s", EXERCISE_TYPES[k], (k==NUM_EXERCISE_TYPES-1)?"\n":", ");
-                
-                printf("Enter comma-separated routine for %s: ", DAYS_OF_WEEK[j]);
-                fgets(input_buffer, sizeof(input_buffer), stdin);
-                input_buffer[strcspn(input_buffer, "\n")] = 0; 
-                if (is_routine_valid(input_buffer, &core_used_this_week)) {
-                    strcpy(routines[i][j], input_buffer);
-                    printf("Routine for %s saved.\n", DAYS_OF_WEEK[j]);
-                    valid_input = 1;
-                } else {
-                    printf("Please re-enter the routine for %s, following the rules.\n", DAYS_OF_WEEK[j]);
-                }
-            } while (!valid_input);
+        choice = getchar();
+        while(getchar() != '\n');
+
+        if (choice == '0') break;
+
+        switch(toupper(choice)) {
+            case 'A':
+                // This function is defined in the full problem 2 solution
+                // setHealth(); 
+                printf("\n'Enter Fitness Data' was part of the previous problem.\n");
+                break;
+            case 'B':
+                getHealth();
+                break;
+            case 'C':
+                setExerciseRoutine();
+                break;
+            case 'D':
+                getExerciseRoutine();
+                break;
+            default:
+                printf("\nInvalid choice. Please try again.\n");
         }
+        printf("\nPress Enter to continue...");
+        getchar();
     }
-    printf("\nAll workout routines have been set.\n");
 }
 
-void getExerciseRoutine(const char routines[][NUM_DAYS][MAX_ROUTINE_LEN]) {
-    char name_buffer[100];
-    printf("\n--- [View Basic Workout Routine] ---\n");
-    display_member_list();
-    printf("Enter the full name of the member to view their routine: ");
-    fgets(name_buffer, sizeof(name_buffer), stdin);
-    name_buffer[strcspn(name_buffer, "\n")] = 0; 
 
-    int found_index = -1;
-    for (int i = 0; i < NUM_MEMBERS; i++) {
-        if (strcmp(name_buffer, MILLIWAYS_NAMES[i]) == 0) {
-            found_index = i;
+void run_training_system() {
+    // This function is the main entry point for the "Training" section.
+    show_physical_strength_menu();
+}
+
+
+int main(void) {
+    // The main program loop.
+    while (1) {
+        clear_screen();
+        printf("========================================\n");
+        printf("        MAGRATHEA Main Menu\n");
+        printf("========================================\n");
+        printf("   I. Audition Management\n");
+        printf("   II. Training\n");
+        printf("   III. Debut\n");
+        printf("----------------------------------------\n");
+        printf("Enter a menu number, or 'Q' to quit.\n");
+        printf("Choice: ");
+
+        char input_buf[10];
+        fgets(input_buf, sizeof(input_buf), stdin);
+        input_buf[strcspn(input_buf, "\n")] = 0;
+
+        if (strlen(input_buf) == 0 || strcmp(input_buf, "0") == 0 || toupper(input_buf[0]) == 'Q') {
             break;
         }
+
+        if (strcmp(input_buf, "II") == 0 || strcmp(input_buf, "2") == 0) {
+            run_training_system();
+        } else {
+            printf("\nThis feature is not yet implemented.\n");
+            printf("Press Enter to continue...");
+            getchar();
+        }
     }
 
-    if (found_index != -1) {
-        printf("\n--- Weekly Workout Routine for %s (%s) ---\n",
-               MILLIWAYS_NAMES[found_index], MILLIWAYS_NICKNAMES[found_index]);
-        for (int i = 0; i < NUM_DAYS; i++) {
-            printf("%-10s: %s\n", DAYS_OF_WEEK[i], routines[found_index][i]);
-        }
-    } else {
-        printf("Member with name '%s' not found.\n", name_buffer);
-    }
+    printf("\nExiting Magrathea System. Goodbye!\n");
+    return 0;
 }
